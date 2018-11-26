@@ -15,21 +15,17 @@ from django.contrib import messages
 from django.utils.safestring import mark_safe
 from django.views.generic import ListView
 import json
+import datetime
 
 
 class SortMethod:
-    NEW = {'ordering': ['-posted'],
-           'name': 'new'}
-    HOT = {'ordering': ['-hotness', '-posted'],
-           'name': 'hot'}
-    TOP = {'ordering': ['-num_likes', '-posted'],
-           'name': 'top'}
-    RANDOM = {'ordering': ['?'],
-              'name': 'random'}
+    NEW = {'ordering': ['-posted']}
+    HOT = {'ordering': ['-hotness', '-posted']}
+    TOP = {'ordering': ['-num_likes', '-posted']}
+    RANDOM = {'ordering': ['?']}
 
 
 class DweetFeed(ListView):
-
     sort = SortMethod.NEW  # default sort by new
     model = Dweet
     context_object_name = 'dweets'
@@ -46,7 +42,7 @@ class DweetFeed(ListView):
         context['title'] = self.title
         context['feed_type'] = self.feed_type
         context['show_submit_box'] = self.show_submit_box
-        context['sort'] = self.sort['name']
+        context['feed_name'] = self.feed_name
         return context
 
     def get_queryset(self):
@@ -75,9 +71,8 @@ class DweetFeed(ListView):
 
 
 class AllDweetFeed(DweetFeed):
-    """
-    Base class for the main dweet feeds that contains all dweets
-    """
+    """ Base class for the main dweet feeds that contains all dweets """
+
     def get_dweet_list(self):
         dweet_list = (Dweet.objects.annotate(num_likes=Count('likes')))
         return dweet_list
@@ -86,21 +81,85 @@ class AllDweetFeed(DweetFeed):
 class HotDweetFeed(AllDweetFeed):
     title = "Dwitter  - javascript demos in 140 characters"
     sort = SortMethod.HOT
+    feed_name = "hot"
 
 
-class TopDweetFeed(AllDweetFeed):
-    title = "Top dweets | Dwitter"
+class TopWeekDweetFeed(DweetFeed):
+    title = "Top dweets this week | Dwitter"
     sort = SortMethod.TOP
+    feed_name = "top-week"
+    top_name = "week"
+
+    def get_dweet_list(self):
+        date_cutoff = datetime.date.today() - datetime.timedelta(days=7)
+        dweet_list = (Dweet.objects.filter(posted__gte=date_cutoff)
+                      .annotate(num_likes=Count('likes')))
+        return dweet_list
+
+    def get_context_data(self, **kwargs):
+        context = super(TopWeekDweetFeed, self).get_context_data(**kwargs)
+        context['top_name'] = self.top_name
+        return context
+
+
+class TopMonthDweetFeed(DweetFeed):
+    title = "Top dweets this month | Dwitter"
+    sort = SortMethod.TOP
+    feed_name = "top-month"
+    top_name = "month"
+
+    def get_dweet_list(self):
+        date_cutoff = datetime.date.today() - datetime.timedelta(days=30)
+        dweet_list = (Dweet.objects.filter(posted__gte=date_cutoff)
+                      .annotate(num_likes=Count('likes')))
+        return dweet_list
+
+    def get_context_data(self, **kwargs):
+        context = super(TopMonthDweetFeed, self).get_context_data(**kwargs)
+        context['top_name'] = self.top_name
+        return context
+
+
+class TopYearDweetFeed(DweetFeed):
+    title = "Top dweets this year | Dwitter"
+    sort = SortMethod.TOP
+    feed_name = "top-year"
+    top_name = "year"
+
+    def get_dweet_list(self):
+        date_cutoff = datetime.date.today() - datetime.timedelta(days=365)
+        dweet_list = (Dweet.objects.filter(posted__gte=date_cutoff)
+                      .annotate(num_likes=Count('likes')))
+        return dweet_list
+
+    def get_context_data(self, **kwargs):
+        context = super(TopYearDweetFeed, self).get_context_data(**kwargs)
+        context['top_name'] = self.top_name
+        return context
+
+
+class TopAllDweetFeed(AllDweetFeed):
+    title = "Top dweets of all time | Dwitter"
+    sort = SortMethod.TOP
+    feed_name = "top-all"
+    top_name = "all time"
+
+    def get_context_data(self, **kwargs):
+        context = super(TopAllDweetFeed, self).get_context_data(**kwargs)
+        context['top_name'] = self.top_name
+        return context
 
 
 class NewDweetFeed(AllDweetFeed):
     title = "New dweets | Dwitter"
     sort = SortMethod.NEW
+    feed_name = "new"
 
 
 class RandomDweetFeed(AllDweetFeed):
     title = "Random dweets | Dwitter"
     sort = SortMethod.RANDOM
+    feed_name = "random"
 
 
 class HashtagFeed(DweetFeed):
@@ -125,6 +184,7 @@ class HashtagFeed(DweetFeed):
 
 class NewHashtagFeed(HashtagFeed):
     sort = SortMethod.NEW
+    feed_name = "new"
 
     def get_title(self):
         hashtag_name = self.kwargs['hashtag_name']
@@ -133,6 +193,7 @@ class NewHashtagFeed(HashtagFeed):
 
 class TopHashtagFeed(HashtagFeed):
     sort = SortMethod.TOP
+    feed_name = "top"
 
     def get_title(self):
         hashtag_name = self.kwargs['hashtag_name']
@@ -169,6 +230,7 @@ class UserFeed(DweetFeed):
 
 class NewUserFeed(UserFeed):
     sort = SortMethod.NEW
+    feed_name = "new"
 
     def get_title(self):
         return "Dweets by u/" + self.kwargs['url_username'] + " | Dwitter"
@@ -176,6 +238,7 @@ class NewUserFeed(UserFeed):
 
 class TopUserFeed(UserFeed):
     sort = SortMethod.TOP
+    feed_name = "top"
 
     def get_title(self):
         return "Top dweets by u/" + self.kwargs['url_username'] + " | Dwitter"
@@ -183,6 +246,7 @@ class TopUserFeed(UserFeed):
 
 class HotUserFeed(UserFeed):
     sort = SortMethod.HOT
+    feed_name = "hot"
 
     def get_title(self):
         return "Hot dweets by u/" + self.kwargs['url_username'] + " | Dwitter"
@@ -218,6 +282,7 @@ class LikedFeed(DweetFeed):
 
 class NewLikedFeed(LikedFeed):
     sort = SortMethod.NEW
+    feed_name = "new"
 
     def get_title(self):
         return "Dweets awesomed by u/" + self.kwargs['url_username'] + " | Dwitter"
